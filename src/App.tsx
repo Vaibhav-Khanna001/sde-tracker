@@ -296,11 +296,18 @@ const TOPICS = {
   },
 };
 
-const getAllTopics = () => {
-  const all = {};
+// ── Types ──────────────────────────────────────────────────────────────────────
+type TopicKey = keyof typeof TOPICS;
+type TopicData = typeof TOPICS[TopicKey];
+type CheckedState = Record<string, boolean>;
+type Progress = { total: number; done: number; pct: number };
+
+// ── Helpers ────────────────────────────────────────────────────────────────────
+const getAllTopics = (): CheckedState => {
+  const all: CheckedState = {};
   Object.entries(TOPICS).forEach(([subject, data]) => {
     Object.entries(data.sections).forEach(([section, items]) => {
-      items.forEach((item, i) => {
+      (items as string[]).forEach((_item, i) => {
         const key = `${subject}__${section}__${i}`;
         all[key] = false;
       });
@@ -311,8 +318,9 @@ const getAllTopics = () => {
 
 const STORAGE_KEY = "sde_tracker_v2";
 
+// ── App ────────────────────────────────────────────────────────────────────────
 export default function App() {
-  const [checked, setChecked] = useState(() => {
+  const [checked, setChecked] = useState<CheckedState>(() => {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       return saved ? JSON.parse(saved) : getAllTopics();
@@ -320,8 +328,8 @@ export default function App() {
       return getAllTopics();
     }
   });
-  const [activeSubject, setActiveSubject] = useState("JavaScript");
-  const [view, setView] = useState("tracker"); // 'tracker' | 'overview'
+  const [activeSubject, setActiveSubject] = useState<TopicKey>("JavaScript");
+  const [view, setView] = useState<"tracker" | "overview">("tracker");
 
   useEffect(() => {
     try {
@@ -329,15 +337,15 @@ export default function App() {
     } catch {}
   }, [checked]);
 
-  const toggle = (key) => {
+  const toggle = (key: string) => {
     setChecked((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  const getSubjectProgress = (subject) => {
+  const getSubjectProgress = (subject: TopicKey): Progress => {
     const data = TOPICS[subject];
     let total = 0, done = 0;
     Object.entries(data.sections).forEach(([section, items]) => {
-      items.forEach((_, i) => {
+      (items as string[]).forEach((_item, i) => {
         const key = `${subject}__${section}__${i}`;
         total++;
         if (checked[key]) done++;
@@ -346,9 +354,9 @@ export default function App() {
     return { total, done, pct: total ? Math.round((done / total) * 100) : 0 };
   };
 
-  const getTotalProgress = () => {
+  const getTotalProgress = (): Progress => {
     let total = 0, done = 0;
-    Object.keys(TOPICS).forEach((s) => {
+    (Object.keys(TOPICS) as TopicKey[]).forEach((s) => {
       const p = getSubjectProgress(s);
       total += p.total;
       done += p.done;
@@ -356,10 +364,10 @@ export default function App() {
     return { total, done, pct: total ? Math.round((done / total) * 100) : 0 };
   };
 
-  const getSectionProgress = (subject, section) => {
-    const items = TOPICS[subject].sections[section];
+  const getSectionProgress = (subject: TopicKey, section: string): { done: number; total: number } => {
+    const items = TOPICS[subject].sections[section as keyof typeof TOPICS[typeof subject]["sections"]] as string[];
     let done = 0;
-    items.forEach((_, i) => {
+    items.forEach((_item, i) => {
       if (checked[`${subject}__${section}__${i}`]) done++;
     });
     return { done, total: items.length };
@@ -396,7 +404,6 @@ export default function App() {
           </div>
         </div>
 
-        {/* Total Progress */}
         <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
           <div style={{ textAlign: "right" }}>
             <div style={{ fontSize: 11, color: "#555", letterSpacing: 2, textTransform: "uppercase" }}>Overall</div>
@@ -438,10 +445,9 @@ export default function App() {
           background: "#0A0A0F",
           flexShrink: 0,
         }}>
-          {/* View toggle */}
           <div style={{ padding: "12px 16px", borderBottom: "1px solid #1a1a1a" }}>
             <div style={{ display: "flex", gap: 4 }}>
-              {["tracker", "overview"].map(v => (
+              {(["tracker", "overview"] as const).map(v => (
                 <button key={v} onClick={() => setView(v)} style={{
                   flex: 1,
                   padding: "6px 0",
@@ -461,7 +467,7 @@ export default function App() {
             </div>
           </div>
 
-          {Object.keys(TOPICS).map((subject) => {
+          {(Object.keys(TOPICS) as TopicKey[]).map((subject) => {
             const p = getSubjectProgress(subject);
             const s = TOPICS[subject];
             const isActive = activeSubject === subject;
@@ -515,7 +521,12 @@ export default function App() {
         {/* Main Content */}
         <div style={{ flex: 1, overflowY: "auto", padding: "24px 32px" }}>
           {view === "overview" ? (
-            <OverviewGrid topics={TOPICS} getSubjectProgress={getSubjectProgress} setActiveSubject={setActiveSubject} setView={setView} />
+            <OverviewGrid
+              topics={TOPICS}
+              getSubjectProgress={getSubjectProgress}
+              setActiveSubject={setActiveSubject}
+              setView={setView}
+            />
           ) : (
             <SubjectView
               subject={activeSubject}
@@ -532,11 +543,20 @@ export default function App() {
   );
 }
 
-function SubjectView({ subject, data, checked, toggle, getSectionProgress, getSubjectProgress }) {
+// ── SubjectView ────────────────────────────────────────────────────────────────
+interface SubjectViewProps {
+  subject: TopicKey;
+  data: TopicData;
+  checked: CheckedState;
+  toggle: (key: string) => void;
+  getSectionProgress: (subject: TopicKey, section: string) => { done: number; total: number };
+  getSubjectProgress: (subject: TopicKey) => Progress;
+}
+
+function SubjectView({ subject, data, checked, toggle, getSectionProgress, getSubjectProgress }: SubjectViewProps) {
   const p = getSubjectProgress(subject);
   return (
     <div>
-      {/* Subject Header */}
       <div style={{ marginBottom: 28, display: "flex", alignItems: "flex-start", justifyContent: "space-between" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <div style={{
@@ -566,7 +586,6 @@ function SubjectView({ subject, data, checked, toggle, getSectionProgress, getSu
         </div>
       </div>
 
-      {/* Big progress bar */}
       <div style={{ height: 6, background: "#1a1a1a", borderRadius: 3, marginBottom: 32 }}>
         <div style={{
           width: `${p.pct}%`,
@@ -577,7 +596,6 @@ function SubjectView({ subject, data, checked, toggle, getSectionProgress, getSu
         }} />
       </div>
 
-      {/* Sections */}
       {Object.entries(data.sections).map(([section, items]) => {
         const sp = getSectionProgress(subject, section);
         return (
@@ -590,7 +608,7 @@ function SubjectView({ subject, data, checked, toggle, getSectionProgress, getSu
               <div style={{ fontSize: 11, color: "#444" }}>{sp.done}/{sp.total}</div>
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
-              {items.map((item, i) => {
+              {(items as string[]).map((item: string, i: number) => {
                 const key = `${subject}__${section}__${i}`;
                 const isDone = checked[key];
                 return (
@@ -608,10 +626,9 @@ function SubjectView({ subject, data, checked, toggle, getSectionProgress, getSu
                       border: `1px solid ${isDone ? "#1a3d25" : "#1a1a22"}`,
                       transition: "all 0.15s",
                     }}
-                    onMouseEnter={e => { if (!isDone) e.currentTarget.style.borderColor = "#2a2a3a"; }}
-                    onMouseLeave={e => { if (!isDone) e.currentTarget.style.borderColor = "#1a1a22"; }}
+                    onMouseEnter={e => { if (!isDone) (e.currentTarget as HTMLDivElement).style.borderColor = "#2a2a3a"; }}
+                    onMouseLeave={e => { if (!isDone) (e.currentTarget as HTMLDivElement).style.borderColor = "#1a1a22"; }}
                   >
-                    {/* Checkbox */}
                     <div style={{
                       width: 18,
                       height: 18,
@@ -645,8 +662,16 @@ function SubjectView({ subject, data, checked, toggle, getSectionProgress, getSu
   );
 }
 
-function OverviewGrid({ topics, getSubjectProgress, setActiveSubject, setView }) {
-  const allSubjects = Object.keys(topics);
+// ── OverviewGrid ───────────────────────────────────────────────────────────────
+interface OverviewGridProps {
+  topics: typeof TOPICS;
+  getSubjectProgress: (subject: TopicKey) => Progress;
+  setActiveSubject: (subject: TopicKey) => void;
+  setView: (view: "tracker" | "overview") => void;
+}
+
+function OverviewGrid({ topics, getSubjectProgress, setActiveSubject, setView }: OverviewGridProps) {
+  const allSubjects = Object.keys(topics) as TopicKey[];
   const totalTopics = allSubjects.reduce((acc, s) => acc + getSubjectProgress(s).total, 0);
   const doneTopic = allSubjects.reduce((acc, s) => acc + getSubjectProgress(s).done, 0);
 
@@ -674,8 +699,14 @@ function OverviewGrid({ topics, getSubjectProgress, setActiveSubject, setView })
                 cursor: "pointer",
                 transition: "all 0.2s",
               }}
-              onMouseEnter={e => { e.currentTarget.style.borderColor = s.color; e.currentTarget.style.transform = "translateY(-2px)"; }}
-              onMouseLeave={e => { e.currentTarget.style.borderColor = "#1a1a22"; e.currentTarget.style.transform = "translateY(0)"; }}
+              onMouseEnter={e => {
+                (e.currentTarget as HTMLDivElement).style.borderColor = s.color;
+                (e.currentTarget as HTMLDivElement).style.transform = "translateY(-2px)";
+              }}
+              onMouseLeave={e => {
+                (e.currentTarget as HTMLDivElement).style.borderColor = "#1a1a22";
+                (e.currentTarget as HTMLDivElement).style.transform = "translateY(0)";
+              }}
             >
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
                 <div style={{
